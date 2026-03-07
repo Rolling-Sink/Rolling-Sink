@@ -8,6 +8,7 @@
 [![Paper](https://img.shields.io/badge/arXiv-Paper-b31b1b?logo=arxiv&logoColor=white)](https://arxiv.org/abs/2602.07775)
 [![HuggingFace Demo](https://img.shields.io/badge/🤗%20HuggingFace-Demo%20-yellow)](https://huggingface.co/spaces/haodongli/RollingSink)
 [![Gallery](https://img.shields.io/badge/Gallery-5~30min%20Videos-red?logo=youtube)](https://www.youtube.com/watch?v=U1eAGF_jcxI&list=PLIfXMX0d4BSJO_S3Wte7SAZpcdSFmZEvD)
+[![BibTeX](https://img.shields.io/badge/BibTeX-grey?logo=googlescholar&logoColor=white)](https://rolling-sink.github.io/bibtex.txt)
 
 [Haodong Li](https://haodong2000.github.io/)<sup>1</sup>,
 [Shaoteng Liu](https://www.shaotengliu.com/)<sup>2</sup>,
