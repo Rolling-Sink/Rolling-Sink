@@ -111,8 +111,6 @@ if __name__ == "__main__":
         title="Rolling Sink: Bridging Limited-Horizon Training and Open-Ended Testing in Autoregressive Video Diffusion",
         description="""
             <strong>Please consider starring <span style="color: orange">&#9733;</span> our <a href="https://github.com/haodong2000/RollingSink" target="_blank" rel="noopener noreferrer">GitHub Repo</a> if you find this demo useful!</strong>
-            <br>
-            <strong>Please consider duplicating this demo or running it locally (instructions in our <a href="https://github.com/haodong2000/RollingSink" target="_blank" rel="noopener noreferrer">GitHub Repo</a>) to skip the queue.</strong>
         """,
         inputs=inputs,
         outputs=outputs,

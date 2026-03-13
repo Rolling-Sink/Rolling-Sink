@@ -246,7 +246,7 @@ class CausalWanSelfAttention(nn.Module):
 
             if timestep == 0 and current_end - 3 * frame_seqlen >= self.max_attention_size:
                 current_start_frame_RS = current_start_frame - 3
-                reverse_window_size = (self.max_attention_size//frame_seqlen) + - 3
+                reverse_window_size = (self.max_attention_size//frame_seqlen) - 3
                 reverse = (current_start_frame_RS // reverse_window_size) % 2 == 1
                 if reverse:
                     right = reverse_window_size - current_start_frame_RS % reverse_window_size 
