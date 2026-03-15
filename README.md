@@ -25,6 +25,7 @@ Please clink the figure below to watch the teaser video on [YouTube](https://www
 [![Demo video](https://img.youtube.com/vi/oNFHLi6vrHI/maxresdefault.jpg)](https://www.youtube.com/watch?v=oNFHLi6vrHI)
 
 ## 📢 News
+- 2026-03-14 Add [Causal Forcing](https://github.com/thu-ml/Causal-Forcing) as a new base model option!
 - 2026-02-22 Demo ([local](https://github.com/haodong2000/RollingSink?tab=readme-ov-file#-gradio-demo) & [online](https://huggingface.co/spaces/haodongli/RollingSink)) released!
 - 2026-02-11 Code released!
 - 2026-02-10 [Paper](https://arxiv.org/abs/2602.07775) released on arXiv!

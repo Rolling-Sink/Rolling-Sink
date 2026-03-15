@@ -18,3 +18,8 @@ for TXT_PATH in "${PROMPTS_DIR}"/*.txt; do
 
     done
 done
+
+### for checkpoints, you can choose either one from below:
+# --checkpoint_path checkpoints/self_forcing_dmd.pt \
+# --checkpoint_path checkpoints/chunkwise/causal_forcing.pt \
+### Note: remove the '--use_ema' flag if using checkpoints/chunkwise/causal_forcing.pt
