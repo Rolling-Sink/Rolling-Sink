@@ -6,7 +6,7 @@
 
 [![Page](https://img.shields.io/badge/Project-Page-pink?logo=googlechrome&logoColor=white)](https://rolling-sink.github.io/)
 [![Paper](https://img.shields.io/badge/arXiv-Paper-b31b1b?logo=arxiv&logoColor=white)](https://arxiv.org/abs/2602.07775)
-[![HuggingFace Demo](https://img.shields.io/badge/🤗%20HuggingFace-Demo%20-yellow)](https://huggingface.co/spaces/haodongli/RollingSink)
+[![HuggingFace Demo](https://img.shields.io/badge/🤗%20HuggingFace-Demo%20-yellow)](https://huggingface.co/spaces/haodongli/Rolling-Sink)
 [![Gallery](https://img.shields.io/badge/Gallery-5~30min%20Videos-red?logo=youtube)](https://www.youtube.com/watch?v=U1eAGF_jcxI&list=PLIfXMX0d4BSJO_S3Wte7SAZpcdSFmZEvD)
 [![Slides](https://img.shields.io/badge/Slides-PPT-blue?logo=slideshare&logoColor=white)](https://drive.google.com/file/d/1blgZtE0LpC8uDCtZBekasjLMXA1oNpRa/view)
 [![BibTeX](https://img.shields.io/badge/BibTeX-grey?logo=googlescholar&logoColor=white)](https://rolling-sink.github.io/bibtex.txt)
@@ -27,7 +27,7 @@ Please click the figure below to watch the teaser video on [YouTube](https://www
 
 ## 📢 News
 - 2026-03-14 Add [Causal Forcing](https://thu-ml.github.io/CausalForcing.github.io/) as a new base model option!
-- 2026-02-22 Demo ([local](https://github.com/Rolling-Sink/Rolling-Sink?tab=readme-ov-file#-gradio-demo) & [online](https://huggingface.co/spaces/haodongli/RollingSink)) released!
+- 2026-02-22 Demo ([local](https://github.com/Rolling-Sink/Rolling-Sink?tab=readme-ov-file#-gradio-demo) & [online](https://huggingface.co/spaces/haodongli/Rolling-Sink)) released!
 - 2026-02-11 Code released!
 - 2026-02-10 [Paper](https://arxiv.org/abs/2602.07775) released on arXiv!
 
@@ -37,7 +37,7 @@ Please click the figure below to watch the teaser video on [YouTube](https://www
 1. Clone the repository:
 ```
 git clone https://github.com/Rolling-Sink/Rolling-Sink.git
-cd RollingSink
+cd Rolling-Sink
 ```
 2. Install dependencies using conda:
 ```
@@ -51,7 +51,7 @@ sh shell_scripts/download_ckpt.sh
 ```
 
 ## 🤗 Gradio Demo
-1. Run the demo online: [HF Space](https://huggingface.co/spaces/haodongli/RollingSink)
+1. Run the demo online: [HF Space](https://huggingface.co/spaces/haodongli/Rolling-Sink)
 2. Run it locally:
 ```
 python app.py
