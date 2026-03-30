@@ -11,9 +11,9 @@
 [![Slides](https://img.shields.io/badge/Slides-PPT-blue?logo=slideshare&logoColor=white)](https://drive.google.com/file/d/1blgZtE0LpC8uDCtZBekasjLMXA1oNpRa/view)
 [![BibTeX](https://img.shields.io/badge/BibTeX-grey?logo=googlescholar&logoColor=white)](https://rolling-sink.github.io/bibtex.txt)
 
-[Haodong Li](https://haodong2000.github.io/)<sup>1</sup>,
-[Shaoteng Liu](https://www.shaotengliu.com/)<sup>2</sup>,
-[Zhe Lin](https://sites.google.com/site/zhelin625/)<sup>2</sup>,
+[Haodong Li](https://haodong2000.github.io/)<sup>1</sup>
+[Shaoteng Liu](https://www.shaotengliu.com/)<sup>2</sup>
+[Zhe Lin](https://sites.google.com/site/zhelin625/)<sup>2</sup>
 [Manmohan Chandraker](https://cseweb.ucsd.edu/~mkchandraker/)<sup>1&#9993;</sup>
 
 <span class="author-block"><sup>1</sup>UC San Diego</span>

@@ -16,7 +16,6 @@ wandb==0.23.0
 omegaconf==2.3.0
 einops==0.8.1
 av==13.1.0
-# git+https://github.com/openai/CLIP.git # version: 1.0
 open_clip_torch==3.2.0
 starlette==0.50.0
 pycocotools==2.0.10
@@ -27,8 +26,6 @@ pydantic==2.11.0
 scikit-image==0.25.2
 huggingface_hub[cli]==0.36.0
 dominate==2.9.1
-# nvidia-tensorrt==99.0.0
-# pycuda==2025.1.2
 onnx==1.19.1
 onnxruntime==1.23.2
 onnxscript==0.5.6
