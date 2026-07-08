@@ -82,7 +82,7 @@ If you find our work useful in your research, please consider citing our paperü
 ## ü§ù Acknowledgement
 This implementation is impossible without the awesome open-cource contributions of:
 - [Self Forcing](https://self-forcing.github.io/)
-- [LongLive](https://nvlabs.github.io/LongLive/)
+- [LongLive](https://github.com/NVlabs/LongLive/)
 - [CausVid](https://causvid.github.io/)
 - [Wan](https://wan.video/)
 - [Gradio](https://github.com/gradio-app/gradio)
