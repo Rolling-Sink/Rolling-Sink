@@ -9,6 +9,7 @@ from wan.modules.model import WanModel, RegisterTokens, GanAttentionBlock
 from wan.modules.vae import _video_vae
 from wan.modules.t5 import umt5_xxl
 from wan.modules.causal_model import CausalWanModel
+from utils.timestep import is_zero_timestep
 
 
 class WanTextEncoder(torch.nn.Module):
@@ -225,7 +226,8 @@ class WanDiffusionWrapper(torch.nn.Module):
         concat_time_embeddings: Optional[bool] = False,
         clean_x: Optional[torch.Tensor] = None,
         aug_t: Optional[torch.Tensor] = None,
-        cache_start: Optional[int] = None
+        cache_start: Optional[int] = None,
+        timestep_is_zero: Optional[bool] = None,
     ) -> torch.Tensor:
         prompt_embeds = conditional_dict["prompt_embeds"]
 
@@ -238,6 +240,11 @@ class WanDiffusionWrapper(torch.nn.Module):
         logits = None
         # X0 prediction
         if kv_cache is not None:
+            if timestep_is_zero is None:
+                # Backward compatibility for callers outside the bundled
+                # pipelines. Internal pipelines extract this before entering
+                # the model so compiled graphs never execute Tensor.item().
+                timestep_is_zero = is_zero_timestep(timestep[0, 0])
             flow_pred = self.model(
                 noisy_image_or_video.permute(0, 2, 1, 3, 4),
                 t=input_timestep, context=prompt_embeds,
@@ -245,7 +252,8 @@ class WanDiffusionWrapper(torch.nn.Module):
                 kv_cache=kv_cache,
                 crossattn_cache=crossattn_cache,
                 current_start=current_start,
-                cache_start=cache_start
+                cache_start=cache_start,
+                timestep_is_zero=timestep_is_zero,
             ).permute(0, 2, 1, 3, 4)
         else:
             if clean_x is not None:
