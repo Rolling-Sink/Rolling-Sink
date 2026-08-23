@@ -2,6 +2,7 @@ from typing import List, Optional
 import torch
 
 from utils.wan_wrapper import WanDiffusionWrapper, WanTextEncoder, WanVAEWrapper
+from utils.timestep import is_zero_timestep
 
 from utils.memory import gpu, get_cuda_free_memory_gb, DynamicSwapInstaller, move_model_to_device_with_memory_preservation
 
@@ -147,6 +148,7 @@ class CausalInferencePipeline(torch.nn.Module):
                     kv_cache=self.kv_cache1,
                     crossattn_cache=self.crossattn_cache,
                     current_start=current_start_frame * self.frame_seq_length,
+                    timestep_is_zero=True,
                 )
                 current_start_frame += 1
             else:
@@ -165,6 +167,7 @@ class CausalInferencePipeline(torch.nn.Module):
                     kv_cache=self.kv_cache1,
                     crossattn_cache=self.crossattn_cache,
                     current_start=current_start_frame * self.frame_seq_length,
+                    timestep_is_zero=True,
                 )
                 current_start_frame += self.num_frame_per_block
 
@@ -186,6 +189,7 @@ class CausalInferencePipeline(torch.nn.Module):
 
             # Step 3.1: Spatial denoising loop
             for index, current_timestep in enumerate(self.denoising_step_list):
+                timestep_is_zero = is_zero_timestep(current_timestep)
                 # set current timestep
                 timestep = torch.ones(
                     [batch_size, current_num_frames],
@@ -199,7 +203,8 @@ class CausalInferencePipeline(torch.nn.Module):
                         timestep=timestep,
                         kv_cache=self.kv_cache1,
                         crossattn_cache=self.crossattn_cache,
-                        current_start=current_start_frame * self.frame_seq_length
+                        current_start=current_start_frame * self.frame_seq_length,
+                        timestep_is_zero=timestep_is_zero,
                     )
                     next_timestep = self.denoising_step_list[index + 1]
                     noisy_input = self.scheduler.add_noise(
@@ -216,7 +221,8 @@ class CausalInferencePipeline(torch.nn.Module):
                         timestep=timestep,
                         kv_cache=self.kv_cache1,
                         crossattn_cache=self.crossattn_cache,
-                        current_start=current_start_frame * self.frame_seq_length
+                        current_start=current_start_frame * self.frame_seq_length,
+                        timestep_is_zero=timestep_is_zero,
                     )
 
             # Step 3.2: record the model's output
@@ -231,6 +237,7 @@ class CausalInferencePipeline(torch.nn.Module):
                 kv_cache=self.kv_cache1,
                 crossattn_cache=self.crossattn_cache,
                 current_start=current_start_frame * self.frame_seq_length,
+                timestep_is_zero=is_zero_timestep(self.args.context_noise),
             )
 
             if profile:

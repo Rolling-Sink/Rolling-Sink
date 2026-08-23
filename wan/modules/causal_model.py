@@ -772,7 +772,8 @@ class CausalWanModel(ModelMixin, ConfigMixin):
         kv_cache: dict = None,
         crossattn_cache: dict = None,
         current_start: int = 0,
-        cache_start: int = 0
+        cache_start: int = 0,
+        timestep_is_zero: bool = None,
     ):
         r"""
         Run the diffusion model with kv caching.
@@ -846,6 +847,11 @@ class CausalWanModel(ModelMixin, ConfigMixin):
             context = torch.concat([context_clip, context], dim=1)
 
         # arguments
+        if timestep_is_zero is None:
+            # Preserve the direct-model API. Bundled inference pipelines pass
+            # a host boolean and skip this graph-breaking compatibility path.
+            timestep_is_zero = t[0, 0].item() == 0
+
         kwargs = dict(
             e=e0,
             seq_lens=seq_lens,
@@ -853,7 +859,7 @@ class CausalWanModel(ModelMixin, ConfigMixin):
             freqs=self.freqs,
             context=context,
             context_lens=context_lens,
-            timestep=t[0,0].item(),
+            timestep=0 if timestep_is_zero else 1,
             block_mask=self.block_mask
         )
 
