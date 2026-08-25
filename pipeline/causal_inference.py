@@ -1,9 +1,16 @@
-from typing import List, Optional
+"""
+Copyright © 2026 Adobe Inc. and its licensors. All rights reserved.
+
+This file constitutes Licensed Materials under the Adobe Research License.
+Use is limited to noncommercial research purposes.
+See the LICENSE file at the project root for the complete license terms and disclaimer.
+"""
+from typing import List
 import torch
 
 from utils.wan_wrapper import WanDiffusionWrapper, WanTextEncoder, WanVAEWrapper
 
-from utils.memory import gpu, get_cuda_free_memory_gb, DynamicSwapInstaller, move_model_to_device_with_memory_preservation
+from utils.memory import gpu, get_cuda_free_memory_gb, move_model_to_device_with_memory_preservation
 
 
 class CausalInferencePipeline(torch.nn.Module):
@@ -36,7 +43,6 @@ class CausalInferencePipeline(torch.nn.Module):
         self.kv_cache1 = None
         self.args = args
         self.num_frame_per_block = getattr(args, "num_frame_per_block", 1)
-        self.independent_first_frame = args.independent_first_frame
         self.local_attn_size = self.generator.model.local_attn_size
 
         print(f"KV inference with {self.num_frame_per_block} frames per block")
@@ -48,7 +54,6 @@ class CausalInferencePipeline(torch.nn.Module):
         self,
         noise: torch.Tensor,
         text_prompts: List[str],
-        initial_latent: Optional[torch.Tensor] = None,
         return_latents: bool = False,
         profile: bool = False,
         low_memory: bool = False,
@@ -59,10 +64,6 @@ class CausalInferencePipeline(torch.nn.Module):
             noise (torch.Tensor): The input noise tensor of shape
                 (batch_size, num_output_frames, num_channels, height, width).
             text_prompts (List[str]): The list of text prompts.
-            initial_latent (torch.Tensor): The initial latent tensor of shape
-                (batch_size, num_input_frames, num_channels, height, width).
-                If num_input_frames is 1, perform image to video.
-                If num_input_frames is greater than 1, perform video extension.
             return_latents (bool): Whether to return the latents.
         Outputs:
             video (torch.Tensor): The generated video tensor of shape
@@ -70,17 +71,9 @@ class CausalInferencePipeline(torch.nn.Module):
                 It is normalized to be in the range [0, 1].
         """
         batch_size, num_frames, num_channels, height, width = noise.shape
-        if not self.independent_first_frame or (self.independent_first_frame and initial_latent is not None):
-            # If the first frame is independent and the first frame is provided, then the number of frames in the
-            # noise should still be a multiple of num_frame_per_block
-            assert num_frames % self.num_frame_per_block == 0
-            num_blocks = num_frames // self.num_frame_per_block
-        else:
-            # Using a [1, 4, 4, 4, 4, 4, ...] model to generate a video without image conditioning
-            assert (num_frames - 1) % self.num_frame_per_block == 0
-            num_blocks = (num_frames - 1) // self.num_frame_per_block
-        num_input_frames = initial_latent.shape[1] if initial_latent is not None else 0
-        num_output_frames = num_frames + num_input_frames  # add the initial latent frames
+        assert num_frames % self.num_frame_per_block == 0
+        num_blocks = num_frames // self.num_frame_per_block
+        num_output_frames = num_frames
         conditional_dict = self.text_encoder(
             text_prompts=text_prompts
         )
@@ -133,40 +126,6 @@ class CausalInferencePipeline(torch.nn.Module):
 
         # Step 2: Cache context feature
         current_start_frame = 0
-        if initial_latent is not None:
-            timestep = torch.ones([batch_size, 1], device=noise.device, dtype=torch.int64) * 0
-            if self.independent_first_frame:
-                # Assume num_input_frames is 1 + self.num_frame_per_block * num_input_blocks
-                assert (num_input_frames - 1) % self.num_frame_per_block == 0
-                num_input_blocks = (num_input_frames - 1) // self.num_frame_per_block
-                output[:, :1] = initial_latent[:, :1]
-                self.generator(
-                    noisy_image_or_video=initial_latent[:, :1],
-                    conditional_dict=conditional_dict,
-                    timestep=timestep * 0,
-                    kv_cache=self.kv_cache1,
-                    crossattn_cache=self.crossattn_cache,
-                    current_start=current_start_frame * self.frame_seq_length,
-                )
-                current_start_frame += 1
-            else:
-                # Assume num_input_frames is self.num_frame_per_block * num_input_blocks
-                assert num_input_frames % self.num_frame_per_block == 0
-                num_input_blocks = num_input_frames // self.num_frame_per_block
-
-            for _ in range(num_input_blocks):
-                current_ref_latents = \
-                    initial_latent[:, current_start_frame:current_start_frame + self.num_frame_per_block]
-                output[:, current_start_frame:current_start_frame + self.num_frame_per_block] = current_ref_latents
-                self.generator(
-                    noisy_image_or_video=current_ref_latents,
-                    conditional_dict=conditional_dict,
-                    timestep=timestep * 0,
-                    kv_cache=self.kv_cache1,
-                    crossattn_cache=self.crossattn_cache,
-                    current_start=current_start_frame * self.frame_seq_length,
-                )
-                current_start_frame += self.num_frame_per_block
 
         if profile:
             init_end.record()
@@ -175,14 +134,12 @@ class CausalInferencePipeline(torch.nn.Module):
 
         # Step 3: Temporal denoising loop
         all_num_frames = [self.num_frame_per_block] * num_blocks
-        if self.independent_first_frame and initial_latent is None:
-            all_num_frames = [1] + all_num_frames
         for current_num_frames in all_num_frames:
             if profile:
                 block_start.record()
 
             noisy_input = noise[
-                :, current_start_frame - num_input_frames:current_start_frame + current_num_frames - num_input_frames]
+                :, current_start_frame:current_start_frame + current_num_frames]
 
             # Step 3.1: Spatial denoising loop
             for index, current_timestep in enumerate(self.denoising_step_list):

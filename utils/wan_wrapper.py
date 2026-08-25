@@ -1,11 +1,16 @@
+"""
+Copyright © 2026 Adobe Inc. and its licensors. All rights reserved.
+
+This file constitutes Licensed Materials under the Adobe Research License.
+Use is limited to noncommercial research purposes.
+See the LICENSE file at the project root for the complete license terms and disclaimer.
+"""
 import types
 from typing import List, Optional
 import torch
-from torch import nn
 
 from utils.scheduler import SchedulerInterface, FlowMatchScheduler
 from wan.modules.tokenizers import HuggingfaceTokenizer
-from wan.modules.model import WanModel, RegisterTokens, GanAttentionBlock
 from wan.modules.vae import _video_vae
 from wan.modules.t5 import umt5_xxl
 from wan.modules.causal_model import CausalWanModel
@@ -70,21 +75,6 @@ class WanVAEWrapper(torch.nn.Module):
             z_dim=16,
         ).eval().requires_grad_(False)
 
-    def encode_to_latent(self, pixel: torch.Tensor) -> torch.Tensor:
-        # pixel: [batch_size, num_channels, num_frames, height, width]
-        device, dtype = pixel.device, pixel.dtype
-        scale = [self.mean.to(device=device, dtype=dtype),
-                 1.0 / self.std.to(device=device, dtype=dtype)]
-
-        output = [
-            self.model.encode(u.unsqueeze(0), scale).float().squeeze(0)
-            for u in pixel
-        ]
-        output = torch.stack(output, dim=0)
-        # from [batch_size, num_channels, num_frames, height, width]
-        # to [batch_size, num_frames, num_channels, height, width]
-        output = output.permute(0, 2, 1, 3, 4)
-        return output
 
     def decode_to_pixel(self, latent: torch.Tensor, use_cache: bool = False, return_in_cpu: bool = False) -> torch.Tensor:
         # from [batch_size, num_frames, num_channels, height, width]
@@ -123,11 +113,8 @@ class WanDiffusionWrapper(torch.nn.Module):
     ):
         super().__init__()
 
-        if is_causal:
-            self.model = CausalWanModel.from_pretrained(
-                f"wan_models/{model_name}/", local_attn_size=local_attn_size, sink_size=sink_size)
-        else:
-            self.model = WanModel.from_pretrained(f"wan_models/{model_name}/")
+        self.model = CausalWanModel.from_pretrained(
+            f"wan_models/{model_name}/", local_attn_size=local_attn_size, sink_size=sink_size)
         self.model.eval()
 
         # For non-causal diffusion, all frames share the same timestep
@@ -141,30 +128,6 @@ class WanDiffusionWrapper(torch.nn.Module):
         self.seq_len = 32760  # [1, 21, 16, 60, 104]
         self.post_init()
 
-    def enable_gradient_checkpointing(self) -> None:
-        self.model.enable_gradient_checkpointing()
-
-    def adding_cls_branch(self, atten_dim=1536, num_class=4, time_embed_dim=0) -> None:
-        # NOTE: This is hard coded for WAN2.1-T2V-1.3B for now!!!!!!!!!!!!!!!!!!!!
-        self._cls_pred_branch = nn.Sequential(
-            # Input: [B, 384, 21, 60, 104]
-            nn.LayerNorm(atten_dim * 3 + time_embed_dim),
-            nn.Linear(atten_dim * 3 + time_embed_dim, 1536),
-            nn.SiLU(),
-            nn.Linear(atten_dim, num_class)
-        )
-        self._cls_pred_branch.requires_grad_(True)
-        num_registers = 3
-        self._register_tokens = RegisterTokens(num_registers=num_registers, dim=atten_dim)
-        self._register_tokens.requires_grad_(True)
-
-        gan_ca_blocks = []
-        for _ in range(num_registers):
-            block = GanAttentionBlock()
-            gan_ca_blocks.append(block)
-        self._gan_ca_blocks = nn.ModuleList(gan_ca_blocks)
-        self._gan_ca_blocks.requires_grad_(True)
-        # self.has_cls_branch = True
 
     def _convert_flow_pred_to_x0(self, flow_pred: torch.Tensor, xt: torch.Tensor, timestep: torch.Tensor) -> torch.Tensor:
         """
@@ -192,39 +155,12 @@ class WanDiffusionWrapper(torch.nn.Module):
         x0_pred = xt - sigma_t * flow_pred
         return x0_pred.to(original_dtype)
 
-    @staticmethod
-    def _convert_x0_to_flow_pred(scheduler, x0_pred: torch.Tensor, xt: torch.Tensor, timestep: torch.Tensor) -> torch.Tensor:
-        """
-        Convert x0 prediction to flow matching's prediction.
-        x0_pred: the x0 prediction with shape [B, C, H, W]
-        xt: the input noisy data with shape [B, C, H, W]
-        timestep: the timestep with shape [B]
-
-        pred = (x_t - x_0) / sigma_t
-        """
-        # use higher precision for calculations
-        original_dtype = x0_pred.dtype
-        x0_pred, xt, sigmas, timesteps = map(
-            lambda x: x.double().to(x0_pred.device), [x0_pred, xt,
-                                                      scheduler.sigmas,
-                                                      scheduler.timesteps]
-        )
-        timestep_id = torch.argmin(
-            (timesteps.unsqueeze(0) - timestep.unsqueeze(1)).abs(), dim=1)
-        sigma_t = sigmas[timestep_id].reshape(-1, 1, 1, 1)
-        flow_pred = (xt - x0_pred) / sigma_t
-        return flow_pred.to(original_dtype)
-
     def forward(
         self,
         noisy_image_or_video: torch.Tensor, conditional_dict: dict,
         timestep: torch.Tensor, kv_cache: Optional[List[dict]] = None,
         crossattn_cache: Optional[List[dict]] = None,
         current_start: Optional[int] = None,
-        classify_mode: Optional[bool] = False,
-        concat_time_embeddings: Optional[bool] = False,
-        clean_x: Optional[torch.Tensor] = None,
-        aug_t: Optional[torch.Tensor] = None,
         cache_start: Optional[int] = None
     ) -> torch.Tensor:
         prompt_embeds = conditional_dict["prompt_embeds"]
@@ -235,56 +171,22 @@ class WanDiffusionWrapper(torch.nn.Module):
         else:
             input_timestep = timestep
 
-        logits = None
         # X0 prediction
-        if kv_cache is not None:
-            flow_pred = self.model(
-                noisy_image_or_video.permute(0, 2, 1, 3, 4),
-                t=input_timestep, context=prompt_embeds,
-                seq_len=self.seq_len,
-                kv_cache=kv_cache,
-                crossattn_cache=crossattn_cache,
-                current_start=current_start,
-                cache_start=cache_start
-            ).permute(0, 2, 1, 3, 4)
-        else:
-            if clean_x is not None:
-                # teacher forcing
-                flow_pred = self.model(
-                    noisy_image_or_video.permute(0, 2, 1, 3, 4),
-                    t=input_timestep, context=prompt_embeds,
-                    seq_len=self.seq_len,
-                    clean_x=clean_x.permute(0, 2, 1, 3, 4),
-                    aug_t=aug_t,
-                ).permute(0, 2, 1, 3, 4)
-            else:
-                if classify_mode:
-                    flow_pred, logits = self.model(
-                        noisy_image_or_video.permute(0, 2, 1, 3, 4),
-                        t=input_timestep, context=prompt_embeds,
-                        seq_len=self.seq_len,
-                        classify_mode=True,
-                        register_tokens=self._register_tokens,
-                        cls_pred_branch=self._cls_pred_branch,
-                        gan_ca_blocks=self._gan_ca_blocks,
-                        concat_time_embeddings=concat_time_embeddings
-                    )
-                    flow_pred = flow_pred.permute(0, 2, 1, 3, 4)
-                else:
-                    flow_pred = self.model(
-                        noisy_image_or_video.permute(0, 2, 1, 3, 4),
-                        t=input_timestep, context=prompt_embeds,
-                        seq_len=self.seq_len
-                    ).permute(0, 2, 1, 3, 4)
+        flow_pred = self.model(
+            noisy_image_or_video.permute(0, 2, 1, 3, 4),
+            t=input_timestep, context=prompt_embeds,
+            seq_len=self.seq_len,
+            kv_cache=kv_cache,
+            crossattn_cache=crossattn_cache,
+            current_start=current_start,
+            cache_start=cache_start
+        ).permute(0, 2, 1, 3, 4)
 
         pred_x0 = self._convert_flow_pred_to_x0(
             flow_pred=flow_pred.flatten(0, 1),
             xt=noisy_image_or_video.flatten(0, 1),
             timestep=timestep.flatten(0, 1)
         ).unflatten(0, flow_pred.shape[:2])
-
-        if logits is not None:
-            return flow_pred, pred_x0, logits
 
         return flow_pred, pred_x0
 

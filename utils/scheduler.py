@@ -1,3 +1,10 @@
+"""
+Copyright © 2026 Adobe Inc. and its licensors. All rights reserved.
+
+This file constitutes Licensed Materials under the Adobe Research License.
+Use is limited to noncommercial research purposes.
+See the LICENSE file at the project root for the complete license terms and disclaimer.
+"""
 from abc import abstractmethod, ABC
 import torch
 
@@ -174,21 +181,3 @@ class FlowMatchScheduler():
         sigma = self.sigmas[timestep_id].reshape(-1, 1, 1, 1)
         sample = (1 - sigma) * original_samples + sigma * noise
         return sample.type_as(noise)
-
-    def training_target(self, sample, noise, timestep):
-        target = noise - sample
-        return target
-
-    def training_weight(self, timestep):
-        """
-        Input:
-            - timestep: the timestep with shape [B*T]
-        Output: the corresponding weighting [B*T]
-        """
-        if timestep.ndim == 2:
-            timestep = timestep.flatten(0, 1)
-        self.linear_timesteps_weights = self.linear_timesteps_weights.to(timestep.device)
-        timestep_id = torch.argmin(
-            (self.timesteps.unsqueeze(1) - timestep.unsqueeze(0)).abs(), dim=0)
-        weights = self.linear_timesteps_weights[timestep_id]
-        return weights

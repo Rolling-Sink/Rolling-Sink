@@ -1,20 +1,23 @@
+"""
+Copyright © 2026 Adobe Inc. and its licensors. All rights reserved.
+
+This file constitutes Licensed Materials under the Adobe Research License.
+Use is limited to noncommercial research purposes.
+See the LICENSE file at the project root for the complete license terms and disclaimer.
+"""
 import argparse
 import torch
 import os
 from omegaconf import OmegaConf
 from tqdm import tqdm
-from torchvision import transforms
 from torchvision.io import write_video
 from einops import rearrange
 import torch.distributed as dist
 from torch.utils.data import DataLoader, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 
-from pipeline import (
-    CausalDiffusionInferencePipeline,
-    CausalInferencePipeline,
-)
-from utils.dataset import TextDataset, TextImagePairDataset
+from pipeline import CausalInferencePipeline
+from utils.dataset import TextDataset
 from utils.misc import set_seed
 
 from utils.memory import gpu, get_cuda_free_memory_gb, DynamicSwapInstaller
@@ -28,7 +31,6 @@ parser.add_argument("--extended_prompt_path", type=str, help="Path to the extend
 parser.add_argument("--output_folder", type=str, help="Output folder")
 parser.add_argument("--num_output_frames", type=int, default=1203, # 5-minute
                     help="Number of overlap frames between sliding windows")
-parser.add_argument("--i2v", action="store_true", help="Whether to perform I2V (or T2V by default)")
 parser.add_argument("--use_ema", action="store_true", help="Whether to use EMA parameters")
 parser.add_argument("--seed", type=int, default=0, help="Random seed")
 parser.add_argument("--num_samples", type=int, default=1, help="Number of samples to generate per prompt")
@@ -63,12 +65,7 @@ default_config = OmegaConf.load("configs/default_config.yaml")
 config = OmegaConf.merge(default_config, config)
 
 # Initialize pipeline
-if hasattr(config, 'denoising_step_list'):
-    # Few-step inference
-    pipeline = CausalInferencePipeline(config, device=device)
-else:
-    # Multi-step diffusion inference
-    pipeline = CausalDiffusionInferencePipeline(config, device=device)
+pipeline = CausalInferencePipeline(config, device=device)
 
 if args.checkpoint_path:
     state_dict = torch.load(args.checkpoint_path, map_location="cpu")
@@ -84,16 +81,7 @@ pipeline.vae.to(device=gpu)
 
 
 # Create dataset
-if args.i2v:
-    assert not dist.is_initialized(), "I2V does not support distributed inference yet"
-    transform = transforms.Compose([
-        transforms.Resize((480, 832)),
-        transforms.ToTensor(),
-        transforms.Normalize([0.5], [0.5])
-    ])
-    dataset = TextImagePairDataset(args.data_path, transform=transform)
-else:
-    dataset = TextDataset(prompt_path=args.data_path, extended_prompt_path=args.extended_prompt_path)
+dataset = TextDataset(prompt_path=args.data_path, extended_prompt_path=args.extended_prompt_path)
 num_prompts = len(dataset)
 print(f"Number of prompts: {num_prompts}")
 
@@ -111,19 +99,6 @@ if dist.is_initialized():
     dist.barrier()
 
 
-def encode(self, videos: torch.Tensor) -> torch.Tensor:
-    device, dtype = videos[0].device, videos[0].dtype
-    scale = [self.mean.to(device=device, dtype=dtype),
-             1.0 / self.std.to(device=device, dtype=dtype)]
-    output = [
-        self.model.encode(u.unsqueeze(0), scale).float().squeeze(0)
-        for u in videos
-    ]
-
-    output = torch.stack(output, dim=0)
-    return output
-
-
 for i, batch_data in tqdm(enumerate(dataloader), disable=(local_rank != 0)):
     idx = batch_data['idx'].item()
 
@@ -135,49 +110,29 @@ for i, batch_data in tqdm(enumerate(dataloader), disable=(local_rank != 0)):
         batch = batch_data[0]  # First (and only) item in the batch
 
     all_video = []
-    num_generated_frames = 0  # Number of generated (latent) frames
 
-    if args.i2v:
-        # For image-to-video, batch contains image and caption
-        prompt = batch['prompts'][0]  # Get caption from batch
+    # For text-to-video, batch is just the text prompt
+    prompt = batch['prompts'][0]
+    extended_prompt = batch['extended_prompts'][0] if 'extended_prompts' in batch else None
+    if extended_prompt is not None:
+        prompts = [extended_prompt] * args.num_samples
+    else:
         prompts = [prompt] * args.num_samples
 
-        # Process the image
-        image = batch['image'].squeeze(0).unsqueeze(0).unsqueeze(2).to(device=device, dtype=torch.bfloat16)
-
-        # Encode the input image as the first latent
-        initial_latent = pipeline.vae.encode_to_latent(image).to(device=device, dtype=torch.bfloat16)
-        initial_latent = initial_latent.repeat(args.num_samples, 1, 1, 1, 1)
-
-        sampled_noise = torch.randn(
-            [args.num_samples, args.num_output_frames - 1, 16, 60, 104], device=device, dtype=torch.bfloat16
-        )
-    else:
-        # For text-to-video, batch is just the text prompt
-        prompt = batch['prompts'][0]
-        extended_prompt = batch['extended_prompts'][0] if 'extended_prompts' in batch else None
-        if extended_prompt is not None:
-            prompts = [extended_prompt] * args.num_samples
-        else:
-            prompts = [prompt] * args.num_samples
-        initial_latent = None
-
-        sampled_noise = torch.randn(
-            [args.num_samples, config['num_frame_per_block'], 16, 60, 104], device=device, dtype=torch.bfloat16
-        )
-        # repeat noise to cover all output frames
-        num_repeats = args.num_output_frames // config['num_frame_per_block']
-        sampled_noise = sampled_noise.repeat(1, num_repeats, 1, 1, 1)
-        print("\n[MAIN]: Latent video shape:", sampled_noise.shape)
-
+    sampled_noise = torch.randn(
+        [args.num_samples, config['num_frame_per_block'], 16, 60, 104], device=device, dtype=torch.bfloat16
+    )
+    # repeat noise to cover all output frames
+    num_repeats = args.num_output_frames // config['num_frame_per_block']
+    sampled_noise = sampled_noise.repeat(1, num_repeats, 1, 1, 1)
+    print("\n[MAIN]: Latent video shape:", sampled_noise.shape)
 
     # Generate frames
     start_time = time.time()
-    video, latents = pipeline.inference(
+    video, _ = pipeline.inference(
         noise=sampled_noise,
         text_prompts=prompts,
         return_latents=True,
-        initial_latent=initial_latent,
         low_memory=low_memory,
     )
     end_time = time.time()
@@ -189,7 +144,6 @@ for i, batch_data in tqdm(enumerate(dataloader), disable=(local_rank != 0)):
     print(f"[MAIN] FPS: {fps:.2f}")
     current_video = rearrange(video, 'b t c h w -> b t h w c').cpu()
     all_video.append(current_video)
-    num_generated_frames += latents.shape[1]
 
     # Final output video
     video = 255.0 * torch.cat(all_video, dim=1)

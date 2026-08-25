@@ -7,3 +7,4 @@ checkpoints
 videos
 logs
 .gradio_cache
+.claude

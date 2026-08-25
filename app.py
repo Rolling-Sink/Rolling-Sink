@@ -1,3 +1,11 @@
+"""
+Copyright © 2026 Adobe Inc. and its licensors. All rights reserved.
+
+This file constitutes Licensed Materials under the Adobe Research License.
+Use is limited to noncommercial research purposes.
+See the LICENSE file at the project root for the complete license terms and disclaimer.
+"""
+
 import spaces  # must be first!
 import os
 from pathlib import Path
@@ -10,7 +18,7 @@ from einops import rearrange
 from pipeline import CausalInferencePipeline
 from utils.misc import set_seed
 
-from utils.memory import gpu, get_cuda_free_memory_gb, DynamicSwapInstaller
+from utils.memory import gpu
 import time
 
 REPO_ROOT = Path(__file__).resolve().parent
@@ -82,7 +90,6 @@ def fn(prompt, duration):
             noise=sampled_noise_processed,
             text_prompts=[prompt],
             return_latents=False,
-            initial_latent=None,
             low_memory=False,
         )
         all_video = []

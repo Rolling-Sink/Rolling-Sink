@@ -1,3 +1,9 @@
+# Copyright © 2026 Adobe Inc. and its licensors. All rights reserved.
+#
+# This file constitutes Licensed Materials under the Adobe Research License.
+# Use is limited to noncommercial research purposes.
+# See the LICENSE file at the project root for the complete license terms and disclaimer.
+
 export CUDA_VISIBLE_DEVICES=3
 
 PROMPTS_DIR="prompts/example"
